@@ -4,50 +4,47 @@ import matplotlib.pyplot as plt
 
 import tkinter as tk
 
-# def get_user_input():
-#     def submit():
-#         tamCromossomo = int(entry1.get())
-#         pc = float(entry2.get())
-#         pm = float(entry3.get())
-#         numGeracoes = int(entry4.get())
-#         tamPopulacao = int(entry5.get())
-#         root.destroy()
+def get_user_input():
+    def submit():
+        global tamCromossomo, pc, pm, numGeracoes, tamPopulacao
+        tamCromossomo = int(entry1.get())
+        pc = float(entry2.get())
+        pm = float(entry3.get())
+        numGeracoes = int(entry4.get())
+        tamPopulacao = int(entry5.get())
+        root.destroy()
 
-#     root = tk.Tk()
+    root = tk.Tk()
 
-#     tk.Label(root, text="Tamanho do cromossomo:").grid(row=0)
-#     tk.Label(root, text="Probabilidade de crossover:").grid(row=1)
-#     tk.Label(root, text="Probabilidade de mutação:").grid(row=2)
-#     tk.Label(root, text="Número de gerações:").grid(row=3)
-#     tk.Label(root, text="Tamanho da população:").grid(row=4)
+    tk.Label(root, text="Tamanho do cromossomo:").grid(row=0)
+    tk.Label(root, text="Probabilidade de crossover:").grid(row=1)
+    tk.Label(root, text="Probabilidade de mutação:").grid(row=2)
+    tk.Label(root, text="Número de gerações:").grid(row=3)
+    tk.Label(root, text="Tamanho da população:").grid(row=4)
 
-#     entry1 = tk.Entry(root)
-#     entry2 = tk.Entry(root)
-#     entry3 = tk.Entry(root)
-#     entry4 = tk.Entry(root)
-#     entry5 = tk.Entry(root)
+    entry1 = tk.Entry(root)
+    entry2 = tk.Entry(root)
+    entry3 = tk.Entry(root)
+    entry4 = tk.Entry(root)
+    entry5 = tk.Entry(root)
 
-#     entry1.grid(row=0, column=1)
-#     entry2.grid(row=1, column=1)
-#     entry3.grid(row=2, column=1)
-#     entry4.grid(row=3, column=1)
-#     entry5.grid(row=4, column=1)
+    entry1.grid(row=0, column=1)
+    entry2.grid(row=1, column=1)
+    entry3.grid(row=2, column=1)
+    entry4.grid(row=3, column=1)
+    entry5.grid(row=4, column=1)
 
-#     tk.Button(root, text='Enviar', command=submit).grid(row=5, column=1, sticky=tk.W, pady=4)
+    tk.Button(root, text='Enviar', command=submit).grid(row=5, column=1, sticky=tk.W, pady=4)
 
-#     root.mainloop()
+    root.mainloop()
 
-#     return tamCromossomo, pc, pm, numGeracoes, tamPopulacao
+    return tamCromossomo, pc, pm, numGeracoes, tamPopulacao
 
-# tamCromossomo, pc, pm, numGeracoes, tamPopulacao = get_user_input()
+tamCromossomo, pc, pm, numGeracoes, tamPopulacao = get_user_input()
 
-#------------------
+print(tamCromossomo, pc, pm, numGeracoes, tamPopulacao);
 
-tamCromossomo = 100
-pc = 0.95
-pm = 0.1
-numGeracoes = 1000
-tamPopulacao = 50
+
 potenciasDosGeradores = [20, 15, 35, 40, 15, 15, 10]
 pt = sum(potenciasDosGeradores) # potência total
 potenciaDemandadaPorTrimestre = [80, 90, 65, 70]
@@ -199,7 +196,26 @@ while geracoes <= numGeracoes:
     geracoes += 1
 
 print(melhorIndividuo, melhorGeracao, aptidao[indiceMelhorAptidao])
+print("Melhor Indivíduo:", melhorIndividuo)
+print("Melhor Geração:", melhorGeracao)
+print("Melhor Aptidão:", aptidao[indiceMelhorAptidao])
 
+# Gráfico da aptidão ao longo das gerações
+geracoes_list = list(range(geracoes))
+aptidao_list = [np.mean([calculoAptidao(populacao[i]) for i in range(tamPopulacao)]) for _ in range(geracoes)]
+plt.plot(geracoes_list, aptidao_list)
+plt.xlabel('Geração')
+plt.ylabel('Aptidão Média')
+plt.title('Evolução da Aptidão ao Longo das Gerações')
+plt.show()
+
+# Histograma das potências líquidas do melhor indivíduo
+melhor_pl = [potenciaLiquida(pt, sum(potenciasDosGeradores[j] for j in range(len(potenciasDosGeradores)) if melhorIndividuo[j] == GERADOR.get("DESLIGADO")), potenciaDemandadaPorTrimestre[i]) for i in range(trimestres)]
+plt.hist(melhor_pl, bins=10, color='blue', edgecolor='black')
+plt.xlabel('Potência Líquida')
+plt.ylabel('Frequência')
+plt.title('Histograma das Potências Líquidas do Melhor Indivíduo')
+plt.show()
 
         
             
