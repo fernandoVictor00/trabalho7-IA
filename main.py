@@ -4,6 +4,11 @@ import matplotlib.pyplot as plt
 
 import tkinter as tk
 
+GERADOR = {
+    "LIGADO": 0,
+    "DESLIGADO": 1
+}
+
 def get_user_input():
     def submit():
         global tamCromossomo, pc, pm, numGeracoes, tamPopulacao
@@ -40,169 +45,130 @@ def get_user_input():
 
     return tamCromossomo, pc, pm, numGeracoes, tamPopulacao
 
+def calcula_potencia_liquida(potencia_total, potencia_perdida, potencia_demandada):
+    potencia_liquida = potencia_total - potencia_perdida - potencia_demandada
+    return max(0, potencia_liquida)
+
+def calculo_aptidao(individuo, pt, potencias_dos_geradores, potencia_demandada_por_trimestre, trimestres):
+    lista_de_potencia_liquida = []
+
+    for i in range(trimestres):
+        potencia_perdida = sum(potencias_dos_geradores[j] for j in range(len(potencias_dos_geradores)) if individuo[j] == GERADOR["DESLIGADO"])
+        potencia_liquida = calcula_potencia_liquida(pt, potencia_perdida, potencia_demandada_por_trimestre[i])
+        lista_de_potencia_liquida.append(potencia_liquida)
+
+    return np.std(lista_de_potencia_liquida)
+
+def inicializa_populacao(tam_populacao, tam_cromossomo, potencias_dos_geradores, trimestres):
+    populacao = np.zeros((tam_populacao, tam_cromossomo))
+    
+    for i in range(tam_populacao):
+        valores_aleatorios = [rd.randint(0, 2) if x < 2 else rd.randint(0, 3) for x in range(len(potencias_dos_geradores))]
+        
+        for j in range(len(potencias_dos_geradores)):
+            for t in range(trimestres):
+                if j < 2:
+                    populacao[i][j + t * len(potencias_dos_geradores)] = array_de_geradores_um_e_dois_por_trimestre[valores_aleatorios[j]][t]
+                else:
+                    populacao[i][j + t * len(potencias_dos_geradores)] = array_de_geradores_do_tres_ao_sete_por_trimestre[valores_aleatorios[j]][t]
+
+    return populacao
+
+def cruzamento(pai1, pai2, pc, tam_cromossomo, potencias_dos_geradores):
+    if pc > rd.uniform(0, 1):
+        c = rd.randint(1, 3) * len(potencias_dos_geradores)
+        gene11, gene12 = pai1[:c], pai1[c:]
+        gene21, gene22 = pai2[:c], pai2[c:]
+        filho1 = np.concatenate((gene11, gene22), axis=None)
+        filho2 = np.concatenate((gene21, gene12), axis=None)
+        return filho1, filho2
+    else:
+        return pai1, pai2
+
+def mutacao(individuo, pm):
+    if pm > rd.uniform(0, 1):
+        d = rd.randint(0, len(individuo) - 1)
+        individuo[d] = 1 if individuo[d] == 0 else 0
+    return individuo
+
+# Obtém os parâmetros do usuário
 tamCromossomo, pc, pm, numGeracoes, tamPopulacao = get_user_input()
 
-print(tamCromossomo, pc, pm, numGeracoes, tamPopulacao);
-
-
+# Configuração das variáveis específicas do problema
 potenciasDosGeradores = [20, 15, 35, 40, 15, 15, 10]
-pt = sum(potenciasDosGeradores) # potência total
+pt = sum(potenciasDosGeradores)
 potenciaDemandadaPorTrimestre = [80, 90, 65, 70]
-trimestres = 1
-arrayDeGeradoresUmEDoisPorTrimestre = [[1,1,0,0], [0,1,1,0], [0,0,1,1]] ## 1 = gerador desligado, 0 = gerador ligado
-arrayDeGeradoresDoTresAoSetePorTrimestre = [[1,0,0,0], [0,1,0,0], [0,0,1,0], [0,0,0,1]]
+trimestres = 4
+array_de_geradores_um_e_dois_por_trimestre = [[1, 1, 0, 0], [0, 1, 1, 0], [0, 0, 1, 1]]
+array_de_geradores_do_tres_ao_sete_por_trimestre = [[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]]
 
-GERADOR = {
-    "LIGADO": 0,
-    "DESLIGADO": 1
-}
+# Geração da população inicial
+populacao = inicializa_populacao(tamPopulacao, tamCromossomo, potenciasDosGeradores, trimestres)
+
+# Configuração do AG
+melhor_aptidao = 0
+melhor_individuo = []
+melhor_geracao = 0
+
+
+# Antes do loop principal, adicione:
+contadorMelhorGeracao = 0
+melhor_aptidao = 0  # Inicialize com um valor que garanta a primeira atualização
+
+for geracoes in range(numGeracoes + 1):
+    nova_geracao = np.zeros((tamPopulacao, tamCromossomo))
     
+    for novos_individuos in range(0, tamPopulacao, 2):
+        # Cálculo da aptidão
+        aptidao = [calculo_aptidao(populacao[i], pt, potenciasDosGeradores, potenciaDemandadaPorTrimestre, trimestres) for i in range(tamPopulacao)]
+        total_aptidao = sum(aptidao)
 
-def potenciaLiquida(pt, pp, pd):
-    apt = pt - pp - pd
-    if (apt) < 0:
-        return 0
-    return apt
+        # Seleção dos pais para o cruzamento (roleta)
+        probabilidade_individual = aptidao / total_aptidao
+        probabilidade_acumulada = np.cumsum(probabilidade_individual)
 
+        pai1_idx = np.searchsorted(probabilidade_acumulada, rd.uniform(0, 1))
+        pai2_idx = np.searchsorted(probabilidade_acumulada, rd.uniform(0, 1))
 
-def calculoAptidao(individuo):     
-    pl = []
-    for i in range(trimestres):
-        pp = 0
-        for j in range(len(potenciasDosGeradores)):
-            if individuo[j] == GERADOR.get("DESLIGADO"):
-                pp += potenciasDosGeradores[j]
-            pl.append(potenciaLiquida(pt, pp, potenciaDemandadaPorTrimestre[i])) 
+        pai1 = populacao[pai1_idx]
+        pai2 = populacao[pai2_idx]
 
-    print(np.std(pl))
+        # Operação de cruzamento
+        filho1, filho2 = cruzamento(pai1, pai2, pc, tamCromossomo, potenciasDosGeradores)
 
-    return np.std(pl)
+        # Operação de mutação
+        filho1 = mutacao(filho1, pm)
+        filho2 = mutacao(filho2, pm)
 
+        nova_geracao[novos_individuos, :] = filho1
+        nova_geracao[novos_individuos + 1, :] = filho2
 
-#geração da população inicial
-p = np.zeros((tamPopulacao, tamCromossomo))
-for i in range(tamPopulacao):   
-    valoresAleatorios = []
-    for x in range(len(potenciasDosGeradores)):
-        if x < 2:
-            valoresAleatorios.append(rd.randint(0, 2))
-        else:
-            valoresAleatorios.append(rd.randint(0, 3))    
+    # Avaliação do melhor indivíduo
+    melhor_idx = np.argmax(aptidao)
+    melhor_aptidao_atual = aptidao[melhor_idx]
     
-    for j in range(len(potenciasDosGeradores)):          
-        for t in range(trimestres):                           
-            if j < 2:           
-                p[i][j+t*7] = arrayDeGeradoresUmEDoisPorTrimestre[valoresAleatorios[j]][t]                
-            else:
-                p[i][j+t*7] = arrayDeGeradoresDoTresAoSetePorTrimestre[valoresAleatorios[j]][t]       
+    if melhor_aptidao_atual > melhor_aptidao:
+        melhor_aptidao = melhor_aptidao_atual
+        melhor_individuo = populacao[melhor_idx]
+        melhor_geracao = geracoes
+        contadorMelhorGeracao = 0  # Zera o contador quando há uma atualização
 
-#criação de variáveis do AG
-ind = np.zeros(tamCromossomo)
-individuo = np.zeros(tamPopulacao)
-aptidao = np.zeros(tamPopulacao)
-novaGeracao = np.zeros((tamPopulacao, tamCromossomo))
-geracoes = 0
+    populacao = nova_geracao
+    contadorMelhorGeracao += 1
 
-#iniciando o algoritmo
-while geracoes <= numGeracoes:
-    novosIndividuos = 0
-    while novosIndividuos < (tamPopulacao - 1):
-        totalAptidao = 0
-        for i in range(tamPopulacao):                                    
-            aptidao[i] = calculoAptidao(p[i])
-            totalAptidao += aptidao[i]
 
-        
-        # seleção dos pais para o cruzamento - roleta
-        #identificando a probabilidade de cada indivíduo
-        pic = np.zeros(tamPopulacao)
-        piTotal = np.zeros(tamPopulacao)
-        pic = (1/totalAptidao) * aptidao
+# Resultados finais
+print("Melhor Indivíduo:", melhor_individuo)
+print("Aptidão da melhor solução na geração {}: {}".format(melhor_geracao, melhor_aptidao))
+print('contadorMelhorGeracao: ', contadorMelhorGeracao)
+# Após a linha que imprime o melhor indivíduo, adicione:
 
-        #criando a roleta
-        for i in range(tamPopulacao):
-            if(i == 0):
-                piTotal[i] = pic[i]
-            else:
-                piTotal[i] = pic[i] + piTotal[i-1]
-
-        #sorteando os pais de acordo com a probabilidade
-        roleta1 = rd.uniform(0,1)
-        i = 0
-        while roleta1 > piTotal[i]:            
-            i+=1
-        
-        pai1 = i                
-
-        roleta2 = rd.uniform(0,1)
-        i = 0
-        while roleta2 > piTotal[i]:
-            i+=1
-        pai2 = i
-
-        while pai1 == pai2:
-            roleta2 = rd.uniform(0,1)
-            i=0
-            while roleta2 > piTotal[i]:
-                i+=1
-            pai2 = i
-                
-        #operação de cruzamento
-        if pc > rd.uniform(0,1):            
-            c = rd.randint(1, 3) * len(potenciasDosGeradores) #posições 7, 14, 21                   
-            gene11 = p[pai1][0:c]
-            gene12 = p[pai1][c:tamCromossomo]
-            gene21 = p[pai2][0:c]
-            gene22 = p[pai2][c:tamCromossomo]
-            filho1 = np.concatenate((gene11, gene22), axis=None)
-            filho2 = np.concatenate((gene21, gene12), axis=None)
-
-            novaGeracao[novosIndividuos, :] = filho1
-            novosIndividuos += 1
-            novaGeracao[novosIndividuos, :] = filho2
-            novosIndividuos += 1
-
-        #operação de mutação
-        if pm > rd.uniform(0,1):
-            d = round(1 + (tamCromossomo - 2) * rd.uniform(0,1))
-            if novaGeracao[novosIndividuos - 2][d] == 0:
-                novaGeracao[novosIndividuos - 2][d] = 1
-            else:
-                novaGeracao[novosIndividuos - 2][d] = 0
-            if novaGeracao[novosIndividuos - 1][d] == 0:
-                novaGeracao[novosIndividuos - 1][d] = 1
-            else:
-                novaGeracao[novosIndividuos - 1][d] = 0
-
-    indice = aptidao.argmax()
-    # elem = individuo[indice]    
-    elem = aptidao[indice]
-        
-    if geracoes > 0:
-        if elem > melhorAptidao:
-            melhorAptidao = elem
-            indiceMelhorAptidao = indice
-            melhorIndividuo = p[indice]            
-            melhorGeracao = geracoes
-            populacao = novaGeracao
-    else:
-        melhorAptidao = elem
-        indiceMelhorAptidao = indice
-        melhorIndividuo = p[indice]        
-        melhorGeracao = 0
-        populacao = p
-
-    p = novaGeracao
-    geracoes += 1
-
-print(melhorIndividuo, melhorGeracao, aptidao[indiceMelhorAptidao])
-print("Melhor Indivíduo:", melhorIndividuo)
-print("Melhor Geração:", melhorGeracao)
-print("Melhor Aptidão:", aptidao[indiceMelhorAptidao])
+print("Melhor Geração:", melhor_geracao)
+print("Melhor Aptidão:", melhor_aptidao)
 
 # Gráfico da aptidão ao longo das gerações
-geracoes_list = list(range(geracoes))
-aptidao_list = [np.mean([calculoAptidao(populacao[i]) for i in range(tamPopulacao)]) for _ in range(geracoes)]
+geracoes_list = list(range(numGeracoes + 1))
+aptidao_list = [np.mean([calculo_aptidao(populacao[i], pt, potenciasDosGeradores, potenciaDemandadaPorTrimestre, trimestres) for i in range(tamPopulacao)]) for _ in range(numGeracoes + 1)]
 plt.plot(geracoes_list, aptidao_list)
 plt.xlabel('Geração')
 plt.ylabel('Aptidão Média')
@@ -210,28 +176,9 @@ plt.title('Evolução da Aptidão ao Longo das Gerações')
 plt.show()
 
 # Histograma das potências líquidas do melhor indivíduo
-melhor_pl = [potenciaLiquida(pt, sum(potenciasDosGeradores[j] for j in range(len(potenciasDosGeradores)) if melhorIndividuo[j] == GERADOR.get("DESLIGADO")), potenciaDemandadaPorTrimestre[i]) for i in range(trimestres)]
+melhor_pl = [calcula_potencia_liquida(pt, sum(potenciasDosGeradores[j] for j in range(len(potenciasDosGeradores)) if melhor_individuo[j] == GERADOR["DESLIGADO"]), potenciaDemandadaPorTrimestre[i]) for i in range(trimestres)]
 plt.hist(melhor_pl, bins=10, color='blue', edgecolor='black')
 plt.xlabel('Potência Líquida')
 plt.ylabel('Frequência')
 plt.title('Histograma das Potências Líquidas do Melhor Indivíduo')
 plt.show()
-
-        
-            
-                
-        
-
-        
-
-                
-                
-
-
-
-
-
-
-
-
-
